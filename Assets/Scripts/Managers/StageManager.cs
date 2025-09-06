@@ -89,7 +89,7 @@ public class StageManager : IManager
         }
 
         // 엔딩 연출 실행
-        var ending = GameObject.FindObjectOfType<EndingEffect>();
+        var ending = UnityEngine.Object.FindFirstObjectByType<EndingEffect>();
         if (ending != null)
         {
             ending.PlayEnding();

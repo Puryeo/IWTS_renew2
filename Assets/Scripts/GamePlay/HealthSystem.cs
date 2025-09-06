@@ -21,7 +21,7 @@ public class HealthSystem : MonoBehaviour
 
     public void ApplyDamage(float amount)
     {
-        var ending = GameObject.FindObjectOfType<EndingEffect>();
+        var ending = UnityEngine.Object.FindFirstObjectByType<EndingEffect>();
         if (ending != null && ending.isPlaying) return;
 
         currentHealth -= amount;
@@ -53,7 +53,7 @@ public class HealthSystem : MonoBehaviour
     {
         if (playerRenderer == null) return;
 
-        var ending = GameObject.FindObjectOfType<EndingEffect>();
+        var ending = UnityEngine.Object.FindFirstObjectByType<EndingEffect>();
         if (ending != null && ending.isPlaying) return;
 
 

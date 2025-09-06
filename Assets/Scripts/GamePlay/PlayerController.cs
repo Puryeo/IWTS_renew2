@@ -1,245 +1,199 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.SceneManagement;
-using UnitySceneManager = UnityEngine.SceneManagement.SceneManager;
+using System;
 
-// ÇÃ·¹ÀÌ¾î Ä³¸¯ÅÍÀÇ ÀÌµ¿°ú Á¡ÇÁ¸¦ Á¦¾îÇÏ´Â ½ºÅ©¸³Æ®ÀÔ´Ï´Ù.
-// Rigidbody ±â¹İÀÇ ¹°¸® °è»êÀ» »ç¿ëÇÏ¸ç, ÀÏ°üµÈ ´ÜÀÏ Á¡ÇÁ ·ÎÁ÷À» °¡Áı´Ï´Ù.
+/// <summary>
+/// í”Œë ˆì´ì–´ì˜ ì´ë™ê³¼ ë¬¼ë¦¬ë§Œ ë‹´ë‹¹í•˜ëŠ” ìŠ¤í¬ë¦½íŠ¸ì…ë‹ˆë‹¤. ì¹´ë©”ë¼ ì œì–´ ë¡œì§ì´ ì™„ì „íˆ ë¶„ë¦¬ë˜ì—ˆìŠµë‹ˆë‹¤.
+/// This script is responsible only for player movement and physics. Camera control logic is completely separated.
+/// </summary>
 [RequireComponent(typeof(Rigidbody))]
 [RequireComponent(typeof(PlayerInput))]
 public class PlayerController : MonoBehaviour
 {
-    #region ÀÎ½ºÆåÅÍ º¯¼ö
+    #region ì´ë²¤íŠ¸ (Events)
+    public event Action<string> OnGoalReached;
+    #endregion
+
+    #region ì¸ìŠ¤í™í„° ë³€ìˆ˜ (Inspector Variables)
 
     [Header("MOVEMENT SETTINGS")]
-    [Tooltip("Ä³¸¯ÅÍÀÇ ÃÖ´ë ÀÌµ¿ ¼ÓµµÀÔ´Ï´Ù.")]
     [SerializeField] private float _moveSpeed = 7f;
-    [Tooltip("ÃÖ´ë ¼Óµµ¿¡ µµ´ŞÇÏ±â±îÁöÀÇ °¡¼ÓµµÀÔ´Ï´Ù. ³ôÀ»¼ö·Ï ºü¸£°Ô ÃÖ´ë ¼Óµµ¿¡ µµ´ŞÇÕ´Ï´Ù.")]
     [SerializeField] private float _acceleration = 80f;
-    [Tooltip("ÀÔ·ÂÀÌ ¾øÀ» ¶§ Á¤ÁöÇÏ±â±îÁöÀÇ °¨¼ÓµµÀÔ´Ï´Ù. ³ôÀ»¼ö·Ï ºü¸£°Ô ¸ØÃä´Ï´Ù.")]
     [SerializeField] private float _deceleration = 120f;
-    [Tooltip("Ä³¸¯ÅÍ°¡ ÀÌµ¿ ¹æÇâÀ¸·Î È¸ÀüÇÏ´Â ¼ÓµµÀÔ´Ï´Ù.")]
-    [SerializeField] private float _rotationSpeed = 1080f;
 
     [Header("JUMP SETTINGS")]
-    [Tooltip("Á¡ÇÁ ½Ã °¡ÇØÁö´Â ÃÊ±â ÈûÀÇ Å©±âÀÔ´Ï´Ù.")]
     [SerializeField] private float _jumpForce = 12f;
-    [Tooltip("Á¡ÇÁÇÏ¿© »ó½ÂÇÏ´Â µ¿¾È Àû¿ëµÉ Áß·Â ¹èÀ²ÀÔ´Ï´Ù. ³ôÀ»¼ö·Ï ´ú ºØ ¶å´Ï´Ù.")]
     [SerializeField] private float _jumpGravityMultiplier = 2.0f;
-    [Tooltip("Á¡ÇÁ Á¤Á¡¿¡¼­ ¶³¾îÁú ¶§ Àû¿ëµÇ´Â Ãß°¡ Áß·Â ¹èÀ²ÀÔ´Ï´Ù. (ÂËµæÇÑ Á¡ÇÁ°¨)")]
     [SerializeField] private float _fallMultiplier = 3.0f;
-    [Tooltip("°øÁß¿¡¼­ Ä³¸¯ÅÍ¸¦ ÁÂ¿ì·Î Á¦¾îÇÒ ¼ö ÀÖ´Â Á¤µµÀÔ´Ï´Ù. (0: Á¦¾î ºÒ°¡, 1: Áö»ó°ú µ¿ÀÏ)")]
     [SerializeField][Range(0f, 1f)] private float _airControlMultiplier = 0.7f;
 
     [Header("RESPONSIVENESS BUFFERS")]
-    [Tooltip("¹ßÆÇ¿¡¼­ ¶³¾îÁø Á÷ÈÄ¿¡µµ Á¡ÇÁ°¡ °¡´ÉÇÑ À¯¿¹ ½Ã°£ÀÔ´Ï´Ù.")]
     [SerializeField] private float _coyoteTime = 0.15f;
-    [Tooltip("ÂøÁö Á÷Àü¿¡ Á¡ÇÁ¸¦ ¹Ì¸® ÀÔ·ÂÇÒ ¼ö ÀÖ´Â À¯¿¹ ½Ã°£ÀÔ´Ï´Ù.")]
     [SerializeField] private float _jumpBufferTime = 0.15f;
 
     [Header("GROUND DETECTION")]
-    [Tooltip("Áö¸éÀ» °¨ÁöÇÒ À§Ä¡¸¦ ÁöÁ¤ÇÏ´Â Transform ÀÔ´Ï´Ù. (¹ÌÁöÁ¤ ½Ã Ä³¸¯ÅÍ À§Ä¡ »ç¿ë)")]
     [SerializeField] private Transform _groundCheckPoint;
-    [Tooltip("Áö¸é °¨Áö SphereCastÀÇ ¹İÁö¸§ÀÔ´Ï´Ù.")]
     [SerializeField] private float _groundCheckRadius = 0.2f;
-    [Tooltip("Áö¸é °¨Áö SphereCastÀÇ ±æÀÌÀÔ´Ï´Ù.")]
     [SerializeField] private float _groundCheckDistance = 0.3f;
-    [Tooltip("Áö¸éÀ¸·Î ÀÎ½ÄÇÒ ·¹ÀÌ¾î¸¦ ¼³Á¤ÇÕ´Ï´Ù.")]
     [SerializeField] private LayerMask _groundLayer;
 
+    [Header("PLAYER ROTATION SETTINGS")]
+    [Tooltip("ìºë¦­í„°ê°€ ì´ë™ ë°©í–¥ìœ¼ë¡œ íšŒì „í•˜ëŠ” ì†ë„ì…ë‹ˆë‹¤. (The speed at which the character turns to face the movement direction.)")]
+    [SerializeField] private float _rotationSpeed = 15f;
+
     #endregion
 
-    #region ³»ºÎ »óÅÂ º¯¼ö
+    #region ë‚´ë¶€ ìƒíƒœ ë° ì¶œë ¥ ë³€ìˆ˜ (Internal State & Output)
 
-    // Rigidbody ÄÄÆ÷³ÍÆ®(ÀÌ ½ºÅ©¸³Æ®°¡ Á¦¾îÇÏ´Â ¹°¸® ¸öÃ¼)
     private Rigidbody _rb;
+    private Vector2 _moveInput;
+    private bool _isGrounded;
+    private float _coyoteTimeCounter;
+    private float _jumpBufferCounter;
+    private bool _hasCollidedWithGoal = false;
 
-    // ÀÔ·Â°ª ¹× »óÅÂ
-    private Vector2 _moveInput;            // ÃÖ½Å ÀÌµ¿ ÀÔ·Â°ª (x: ÁÂ/¿ì, y: ¾Õ/µÚ)
-    private bool _isGrounded;              // ÇöÀç Áö¸é¿¡ ´ê¾ÆÀÖ´ÂÁö ¿©ºÎ
-    private float _coyoteTimeCounter;      // ÄÚ¿äÅ× Å¸ÀÌ¸Ó Ä«¿îÅÍ
-    private float _jumpBufferCounter;      // Á¡ÇÁ ¹öÆÛ Å¸ÀÌ¸Ó Ä«¿îÅÍ
+    private Transform _mainCameraTransform; // ì¹´ë©”ë¼ ë°©í–¥ì„ ì°¸ê³ í•˜ê¸° ìœ„í•œ ë³€ìˆ˜
 
-    private bool _isCollided = false;
+    [Header("DEBUG OUTPUT")]
+    public Vector2 RelativeInputDirection;
 
     #endregion
 
-    #region À¯´ÏÆ¼ ¶óÀÌÇÁ»çÀÌÅ¬
-
-    // Awake: ÄÄÆ÷³ÍÆ® ÃÊ±âÈ­, Rigidbody Á¦¾à ¼³Á¤
+    #region ìœ ë‹ˆí‹° ë¼ì´í”„ì‚¬ì´í´ (Unity Lifecycle)
     private void Awake()
     {
-        _isCollided = false;
         _rb = GetComponent<Rigidbody>();
         _rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
-        // Enable interpolation so rendered transform stays smooth between physics updates
         _rb.interpolation = RigidbodyInterpolation.Interpolate;
+
+        // ë©”ì¸ ì¹´ë©”ë¼ì˜ Transformì„ ì°¾ì•„ì„œ ì €ì¥í•´ ë‘¡ë‹ˆë‹¤.
+        _mainCameraTransform = Camera.main.transform;
+
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
     }
 
-    // Update: ÀÔ·Â/»óÅÂ Å¸ÀÌ¸Ó ¾÷µ¥ÀÌÆ®
     private void Update()
     {
         HandleState();
         HandleTimers();
     }
 
-    // FixedUpdate: ¹°¸® ¿¬»ê(Á¡ÇÁ, ÀÌµ¿, Áß·Â) Ã³¸®
     private void FixedUpdate()
     {
-        HandleJump();
         HandleMovement();
+        HandleRotation(); // ì´ë™ ë°©í–¥ìœ¼ë¡œ íšŒì „í•˜ëŠ” ë¡œì§ì„ ì¶”ê°€
+        HandleJump();
         HandleGravity();
     }
-
-    // ¿¡µğÅÍ¿¡¼­ °ª ÀÔ·Â ½Ã ÃÖ¼Ò°ª °ËÁõ
-    private void OnValidate()
-    {
-        _jumpForce = Mathf.Max(0f, _jumpForce);
-        _jumpGravityMultiplier = Mathf.Max(1f, _jumpGravityMultiplier);
-        _fallMultiplier = Mathf.Max(1f, _fallMultiplier);
-    }
-
     #endregion
 
-    #region ÀÔ·Â Ã³¸® (PlayerInput¿¡¼­ È£Ãâ)
-
-    // Move ¾×¼Ç Äİ¹é: ÀÌµ¿ ÀÔ·Â ¾÷µ¥ÀÌÆ®
+    #region ì…ë ¥ ì²˜ë¦¬ (Input Handling)
     public void OnMove(InputAction.CallbackContext context)
     {
         _moveInput = context.ReadValue<Vector2>();
     }
 
-    // Jump ¾×¼Ç Äİ¹é: performed ½ÃÁ¡¿¡ Á¡ÇÁ ¹öÆÛ È°¼ºÈ­
     public void OnJump(InputAction.CallbackContext context)
     {
         if (context.performed)
-        {
             _jumpBufferCounter = _jumpBufferTime;
-        }
     }
 
+    // âœ¨ OnLook ë©”ì„œë“œëŠ” PlayerControllerì—ì„œ ì™„ì „íˆ ì œê±°í•©ë‹ˆë‹¤. ì¹´ë©”ë¼ëŠ” CameraControllerê°€ ì œì–´í•©ë‹ˆë‹¤.
+    // âœ¨ The OnLook method is completely removed from PlayerController. The camera is controlled by CameraController.
     #endregion
 
-    #region »óÅÂ ÆÇÁ¤ ¹× Å¸ÀÌ¸Ó
-
-    // Áö¸é ÆÇÁ¤: SphereCast¸¦ »ç¿ëÇÏ¿© groundLayer¿¡ ÇØ´çÇÏ´Â Äİ¶óÀÌ´õ¸¦ °¨Áö
+    #region ìƒíƒœ íŒì • ë° íƒ€ì´ë¨¸ (State & Timers)
     private void HandleState()
     {
         Transform groundCheckOrigin = _groundCheckPoint != null ? _groundCheckPoint : transform;
         _isGrounded = Physics.SphereCast(groundCheckOrigin.position, _groundCheckRadius, Vector3.down, out _, _groundCheckDistance, _groundLayer);
     }
 
-    // ÄÚ¿äÅ× Å¸ÀÌ¸Ó¿Í Á¡ÇÁ ¹öÆÛ Ä«¿îÆ® °¨¼Ò Ã³¸®
     private void HandleTimers()
     {
-        if (_isGrounded)
-        {
-            _coyoteTimeCounter = _coyoteTime;
-        }
-        else
-        {
-            _coyoteTimeCounter -= Time.deltaTime;
-        }
+        _coyoteTimeCounter = _isGrounded ? _coyoteTime : _coyoteTimeCounter - Time.deltaTime;
+        _jumpBufferCounter = _jumpBufferCounter > 0 ? _jumpBufferCounter - Time.deltaTime : 0;
+    }
+    #endregion
 
-        if (_jumpBufferCounter > 0)
+    #region ë¬¼ë¦¬ ì²˜ë¦¬ (Physics Handling)
+
+    private Vector3 _moveDirection; // ì´ë™ ë°©í–¥ì„ ë‹¤ë¥¸ ë©”ì„œë“œì—ì„œ ì‚¬ìš©í•˜ê¸° ìœ„í•´ ë©¤ë²„ ë³€ìˆ˜ë¡œ ë³€ê²½
+
+    private void HandleMovement()
+    {
+        // ì´ë™ ë°©í–¥ì„ ì¹´ë©”ë¼ì˜ ì‹œì ì„ ê¸°ì¤€ìœ¼ë¡œ ê³„ì‚°í•©ë‹ˆë‹¤.
+        Vector3 camForward = _mainCameraTransform.forward;
+        Vector3 camRight = _mainCameraTransform.right;
+        camForward.y = 0;
+        camRight.y = 0;
+
+        _moveDirection = (camForward.normalized * _moveInput.y + camRight.normalized * _moveInput.x);
+        if (_moveDirection.sqrMagnitude > 1f)
+            _moveDirection.Normalize();
+
+        RelativeInputDirection = new Vector2(_moveDirection.x, _moveDirection.z);
+
+        float controlMultiplier = _isGrounded ? 1f : _airControlMultiplier;
+        Vector3 targetVelocity = _moveDirection * _moveSpeed * controlMultiplier;
+
+        float acceleration = _moveDirection.sqrMagnitude > 0.01f ? _acceleration : _deceleration;
+        Vector3 currentPlanarVelocity = new Vector3(_rb.linearVelocity.x, 0, _rb.linearVelocity.z);
+
+        Vector3 newPlanarVelocity = Vector3.MoveTowards(currentPlanarVelocity, targetVelocity, acceleration * Time.fixedDeltaTime);
+        _rb.linearVelocity = new Vector3(newPlanarVelocity.x, _rb.linearVelocity.y, newPlanarVelocity.z);
+    }
+
+    private void HandleRotation()
+    {
+        // ì´ë™ ì…ë ¥ì´ ìˆì„ ë•Œë§Œ ì´ë™ ë°©í–¥ìœ¼ë¡œ ìºë¦­í„°ë¥¼ ë¶€ë“œëŸ½ê²Œ íšŒì „ì‹œí‚µë‹ˆë‹¤.
+        if (_moveInput.sqrMagnitude > 0.01f)
         {
-            _jumpBufferCounter -= Time.deltaTime;
+            Quaternion targetRotation = Quaternion.LookRotation(_moveDirection);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, _rotationSpeed * Time.fixedDeltaTime);
         }
     }
 
-    #endregion
-
-    #region ¹°¸® Ã³¸® (Á¡ÇÁ, ÀÌµ¿, Áß·Â)
-
-    // Á¡ÇÁ ½ÇÇà: ÄÚ¿äÅ× ¹× ¹öÆÛ Á¶°ÇÀÌ ¸¸Á·ÇÒ ¶§ ÇÑ ¹øÀÇ Á¡ÇÁ¸¦ ¼öÇà
     private void HandleJump()
     {
         if (_coyoteTimeCounter > 0f && _jumpBufferCounter > 0f)
         {
-            // ¼öÁ÷ ¼Óµµ ÃÊ±âÈ­ ÈÄ Áï½Ã »ó½Â ¼Óµµ ºÎ¿©
             _rb.linearVelocity = new Vector3(_rb.linearVelocity.x, 0f, _rb.linearVelocity.z);
             _rb.AddForce(Vector3.up * _jumpForce, ForceMode.VelocityChange);
+
             _jumpBufferCounter = 0f;
+            _coyoteTimeCounter = 0f;
         }
     }
 
-    // ÀÌµ¿ Ã³¸®: ¿ùµå ±âÁØ ÀÔ·ÂÀ» »ç¿ëÇÏ¿© ¸ñÇ¥ ¼Óµµ·Î ºÎµå·´°Ô º¸°£
-    private void HandleMovement()
-    {
-        Vector3 moveDirection = new Vector3(_moveInput.x, 0f, _moveInput.y);
-        float controlMultiplier = _isGrounded ? 1f : _airControlMultiplier;
-        Vector3 targetVelocity = moveDirection * _moveSpeed * controlMultiplier;
-
-        float accel = moveDirection.magnitude > 0.1f ? _acceleration : _deceleration;
-        Vector3 currentPlanarVelocity = new Vector3(_rb.linearVelocity.x, 0, _rb.linearVelocity.z);
-
-        Vector3 newPlanarVelocity = Vector3.MoveTowards(
-            currentPlanarVelocity,
-            targetVelocity,
-            accel * Time.fixedDeltaTime
-        );
-
-        _rb.linearVelocity = new Vector3(newPlanarVelocity.x, _rb.linearVelocity.y, newPlanarVelocity.z);
-
-        // ÀÌµ¿ ÁßÀÏ ¶§¸¸ Ä³¸¯ÅÍ°¡ ÀÌµ¿ ¹æÇâÀ» ¹Ù¶óº¸µµ·Ï È¸Àü
-        if (moveDirection.magnitude > 0.1f)
-        {
-            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
-            _rb.MoveRotation(Quaternion.RotateTowards(transform.rotation, targetRotation, _rotationSpeed * Time.fixedDeltaTime));
-        }
-    }
-
-    // Áß·Â º¸Á¤: °øÁß¿¡¼­¸¸ °¡¼Óµµ ±â¹İÀÇ Áß·Â º¯È­ Àû¿ë
     private void HandleGravity()
     {
         if (!_isGrounded)
         {
             float verticalVelocity = _rb.linearVelocity.y;
 
-            // ÇÏ°­ ½Ã Áß·Â °­È­
             if (verticalVelocity < 0)
-            {
-                _rb.linearVelocity += Vector3.up * Physics.gravity.y * (_fallMultiplier - 1) * Time.fixedDeltaTime;
-            }
-            // »ó½Â ½Ã Ãß°¡ Áß·Â Àû¿ë(ºÎµå·¯¿î »ó½Â ¾ïÁ¦)
+                _rb.linearVelocity += Vector3.up * Physics.gravity.y * (_fallMultiplier - 1f) * Time.fixedDeltaTime;
             else if (verticalVelocity > 0)
-            {
-                _rb.linearVelocity += Vector3.up * Physics.gravity.y * (_jumpGravityMultiplier - 1) * Time.fixedDeltaTime;
-            }
+                _rb.linearVelocity += Vector3.up * Physics.gravity.y * (_jumpGravityMultiplier - 1f) * Time.fixedDeltaTime;
         }
     }
+    #endregion
 
-    private async void OnParticleCollision(GameObject goal)
+    #region ì¶©ëŒ ì²˜ë¦¬ (Collision Handling)
+    private void OnTriggerEnter(Collider other)
     {
-        if (_isCollided) return;
+        if (_hasCollidedWithGoal) return;
 
-        _isCollided = true;
-
-        if (goal.CompareTag("Hidden"))
+        if (other.CompareTag("Goal") || other.CompareTag("Hidden"))
         {
-            Debug.Log("È÷µç °ñ µµ´Ş");
-            if (!GameManager.Accomplishment.IsUnlocked((int)AchievementKey.HIDDEN))
-            {
-                await GameManager.Accomplishment.UnLock((int)AchievementKey.HIDDEN);
-
-                if (UnitySceneManager.GetActiveScene().name != Scenes.START)
-                {
-                    GameManager.Scene.LoadScene(Scenes.START);
-
-                    return;
-                }
-            }
+            _hasCollidedWithGoal = true;
+            Debug.Log($"ê³¨ ì§€ì  ë„ë‹¬: {other.tag} (Goal Reached: {other.tag})");
+            OnGoalReached?.Invoke(other.tag);
         }
-
-        if (goal.CompareTag("Goal"))
-        {
-            var currentStageName = UnitySceneManager.GetActiveScene().name;
-            Debug.Log($"°ñÀÎ ÁöÁ¡ µµ´Ş {currentStageName}");
-            GameManager.Stage.ClearedStage(currentStageName);
-        }
-        
     }
-
     #endregion
 }
 
