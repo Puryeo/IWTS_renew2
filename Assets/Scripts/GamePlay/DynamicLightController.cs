@@ -57,7 +57,7 @@ public class SimpleSunController : MonoBehaviour
     private void OnValidate()
     {
         // 안전 범위로 보정
-        rotationSpeed = rotationSpeed;
+        rotationSpeed = Mathf.Max(0f, rotationSpeed);
         fixedElevation = Mathf.Clamp(fixedElevation, 0f, 90f);
         elevationAmplitudeDeg = Mathf.Max(0f, elevationAmplitudeDeg);
         elevationSpeed = Mathf.Max(0f, elevationSpeed);
